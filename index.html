@@ -2,6 +2,7 @@
 <html lang="id">
 <head>
 <base target="_top">
+<script>const RUNNING_IN_APPS_SCRIPT = typeof google !== 'undefined' && !!(google.script && google.script.run);</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LABSOMA PPS - Pembuatan Soal</title>
@@ -117,74 +118,14 @@ tr:last-child td{border-bottom:0}
 <div id="busy"><div class="spin"></div></div>
 
 <script>
-let S = { data: null, view: 'input', tab: 'tugas', q: '', f: {}, printId: '' };
-
-function h(tag, props, ...kids) {
-  const e = document.createElement(tag);
-  let val;
-  for (const k in (props || {})) {
-    const v = props[k];
-    if (k === 'class') e.className = v;
-    else if (k === 'value') val = v;
-    else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
-    else if (v === true) e.setAttribute(k, '');
-    else if (v !== false && v != null) e.setAttribute(k, v);
-  }
-  kids.flat(9).forEach(c => { if (c == null || c === false) return; e.append(c.nodeType ? c : document.createTextNode(String(c))); });
-  if (val !== undefined) e.value = val;
-  return e;
-}
-
-const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxoXy5MvijfVLH416h8echiC0xPONgaRRmrlstkW7cleZMLdX2-o6Ha0YT4e6u8S7V7Rw/exec';
-const GITHUB_ORIGIN = 'https://labsomapps.github.io';
-let bridgeFrame = null;
-let bridgeOrigin = '';
-let bridgeSeq = 0;
-const bridgeCalls = new Map();
-let bridgeReadyResolve;
-const bridgeReady = new Promise(resolve => { bridgeReadyResolve = resolve; });
-
-window.addEventListener('message', ev => {
-  if (!bridgeFrame || ev.source !== bridgeFrame.contentWindow) return;
-  if (ev.origin !== 'https://script.google.com' && !/.googleusercontent\.com$/.test(new URL(ev.origin).hostname)) return;
-  if (ev.data && ev.data.type === 'labsoma-ready') {
-    bridgeOrigin = ev.origin;
-    bridgeReadyResolve();
-    return;
-  }
-  if (ev.origin !== bridgeOrigin || !ev.data || ev.data.type !== 'labsoma-response') return;
-  const pending = bridgeCalls.get(ev.data.id);
-  if (!pending) return;
-  clearTimeout(pending.timer);
-  bridgeCalls.delete(ev.data.id);
-  $busy(false);
-  if (ev.data.ok) pending.resolve(ev.data.value);
-  else pending.reject(new Error(ev.data.error || 'Permintaan gagal.'));
-});
-
-bridgeFrame = document.createElement('iframe');
-bridgeFrame.title = 'Koneksi Apps Script';
-bridgeFrame.setAttribute('aria-hidden', 'true');
-bridgeFrame.style.cssText = 'position:fixed;width:1px;height:1px;left:-10px;bottom:0;opacity:0;border:0;pointer-events:none';
-bridgeFrame.src = GAS_WEB_APP_URL + '?bridge=1';
-document.body.appendChild(bridgeFrame);
-
 function call(fn, ...args) {
+  if (!RUNNING_IN_APPS_SCRIPT) return Promise.reject(new Error('Aplikasi sedang membuka koneksi Apps Script.'));
   $busy(true);
-  const id = String(++bridgeSeq);
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      bridgeCalls.delete(id);
-      $busy(false);
-      const err = new Error('Koneksi Apps Script terputus. Muat ulang halaman atau periksa izin Web App.');
-      toast(err.message, true);
-      reject(err);
-    }, 45000);
-    bridgeCalls.set(id, { resolve, reject, timer });
-    bridgeReady.then(() => {
-      if (!bridgeCalls.has(id)) return;
-      bridgeFrame.contentWindow.postMessage({ type: 'labsoma-call', id, method: fn, args }, bridgeOrigin);
-    });
+  return new Promise((res, rej) => {
+    google.script.run
+      .withSuccessHandler(r => { $busy(false); res(r); })
+      .withFailureHandler(e => { $busy(false); toast((e && e.message) || String(e), true); rej(e); })
+      [fn](...args);
   });
 }
 function $busy(on) { document.getElementById('busy').style.display = on ? 'flex' : 'none'; }
@@ -969,11 +910,12 @@ function vPengingat(m) {
   m.append(h('div', { class: 'card' }, h('h4', { style: 'margin-top:0' }, ico('mail', 18), 'Pengingat email otomatis'), h('p', { style: 'margin-top:0' }, 'Pengingat bisa terkirim otomatis setiap pukul 07.00 untuk tugas yang lewat tenggat atau tinggal 3 hari.'), h('p', {}, 'Status: ', h('b', {}, d.emailAktif ? 'aktif' : 'mati')), h('button', { class: 'btn', onclick: () => call('api_setEmailTrigger', !d.emailAktif).then(x => { setData(x); toast(x.emailAktif ? 'Pengingat email aktif.' : 'Pengingat email dimatikan.'); }).catch(() => {}) }, d.emailAktif ? 'Matikan pengingat email' : 'Aktifkan pengingat email')));
 }
 
-call('api_init').then(setData).catch(err => {
+if (RUNNING_IN_APPS_SCRIPT) call('api_init').then(setData).catch(err => {
   const msg = (err && err.message) ? err.message : String(err || 'Kesalahan tidak diketahui');
   document.getElementById('main').innerHTML = '';
   document.getElementById('main').appendChild(h('div', { class: 'card', style: 'max-width:900px;margin:40px auto;padding:24px' }, h('h3', {}, 'Gagal memuat data'), h('p', {}, 'Detail kesalahan:'), h('pre', { style: 'white-space:pre-wrap;background:#fff0f2;color:#8f2338;padding:14px;border-radius:10px;font-size:12px' }, msg)));
 });
 </script>
+<script>if (!RUNNING_IN_APPS_SCRIPT) { document.body.innerHTML = ""; const f=document.createElement("iframe"); f.title="LABSOMA PPS"; f.src="https://script.google.com/macros/s/AKfycbxoXy5MvijfVLH416h8echiC0xPONgaRRmrlstkW7cleZMLdX2-o6Ha0YT4e6u8S7V7Rw/exec"; f.style="position:fixed;inset:0;width:100%;height:100%;border:0"; document.body.appendChild(f); }</script>
 </body>
 </html>
