@@ -2,7 +2,6 @@
 <html lang="id">
 <head>
 <base target="_top">
-<script>const RUNNING_IN_APPS_SCRIPT = typeof google !== 'undefined' && !!(google.script && google.script.run);</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LABSOMA PPS - Pembuatan Soal</title>
@@ -118,15 +117,39 @@ tr:last-child td{border-bottom:0}
 <div id="busy"><div class="spin"></div></div>
 
 <script>
+const APPS_SCRIPT_BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbxoXy5MvijfVLH416h8echiC0xPONgaRRmrlstkW7cleZMLdX2-o6Ha0YT4e6u8S7V7Rw/exec?bridge=1';
+const apiBridgeFrame = document.createElement('iframe');
+apiBridgeFrame.title = 'Koneksi data';
+apiBridgeFrame.setAttribute('aria-hidden', 'true');
+apiBridgeFrame.style.cssText = 'position:absolute;width:1px;height:1px;left:-10000px;border:0';
+apiBridgeFrame.src = APPS_SCRIPT_BRIDGE_URL;
+document.body.appendChild(apiBridgeFrame);
+let apiBridgeReadyResolve;
+const apiBridgeReady = new Promise(resolve => { apiBridgeReadyResolve = resolve; });
+const apiBridgePending = new Map();
+let apiBridgeNextId = 0;
+window.addEventListener('message', event => {
+  if (event.source !== apiBridgeFrame.contentWindow) return;
+  const message = event.data || {};
+  if (message.type === 'labsoma-ready') { apiBridgeReadyResolve(); return; }
+  if (message.type !== 'labsoma-response' || !apiBridgePending.has(message.id)) return;
+  const pending = apiBridgePending.get(message.id);
+  apiBridgePending.delete(message.id);
+  clearTimeout(pending.timer);
+  if (message.ok) pending.resolve(message.value);
+  else pending.reject(new Error(message.error || 'Apps Script gagal memproses permintaan.'));
+});
 function call(fn, ...args) {
-  if (!RUNNING_IN_APPS_SCRIPT) return Promise.reject(new Error('Aplikasi sedang membuka koneksi Apps Script.'));
   $busy(true);
-  return new Promise((res, rej) => {
-    google.script.run
-      .withSuccessHandler(r => { $busy(false); res(r); })
-      .withFailureHandler(e => { $busy(false); toast((e && e.message) || String(e), true); rej(e); })
-      [fn](...args);
-  });
+  return apiBridgeReady.then(() => new Promise((resolve, reject) => {
+    const id = String(++apiBridgeNextId);
+    const timer = setTimeout(() => {
+      apiBridgePending.delete(id);
+      reject(new Error('Koneksi ke Apps Script timeout. Periksa deployment Web App dan izin aksesnya.'));
+    }, 60000);
+    apiBridgePending.set(id, { resolve, reject, timer });
+    apiBridgeFrame.contentWindow.postMessage({ type: 'labsoma-call', id, method: fn, args }, '*');
+  })).then(value => { $busy(false); return value; }, error => { $busy(false); toast(error.message || String(error), true); throw error; });
 }
 function $busy(on) { document.getElementById('busy').style.display = on ? 'flex' : 'none'; }
 let tt;
@@ -910,12 +933,11 @@ function vPengingat(m) {
   m.append(h('div', { class: 'card' }, h('h4', { style: 'margin-top:0' }, ico('mail', 18), 'Pengingat email otomatis'), h('p', { style: 'margin-top:0' }, 'Pengingat bisa terkirim otomatis setiap pukul 07.00 untuk tugas yang lewat tenggat atau tinggal 3 hari.'), h('p', {}, 'Status: ', h('b', {}, d.emailAktif ? 'aktif' : 'mati')), h('button', { class: 'btn', onclick: () => call('api_setEmailTrigger', !d.emailAktif).then(x => { setData(x); toast(x.emailAktif ? 'Pengingat email aktif.' : 'Pengingat email dimatikan.'); }).catch(() => {}) }, d.emailAktif ? 'Matikan pengingat email' : 'Aktifkan pengingat email')));
 }
 
-if (RUNNING_IN_APPS_SCRIPT) call('api_init').then(setData).catch(err => {
+call('api_init').then(setData).catch(err => {
   const msg = (err && err.message) ? err.message : String(err || 'Kesalahan tidak diketahui');
   document.getElementById('main').innerHTML = '';
   document.getElementById('main').appendChild(h('div', { class: 'card', style: 'max-width:900px;margin:40px auto;padding:24px' }, h('h3', {}, 'Gagal memuat data'), h('p', {}, 'Detail kesalahan:'), h('pre', { style: 'white-space:pre-wrap;background:#fff0f2;color:#8f2338;padding:14px;border-radius:10px;font-size:12px' }, msg)));
 });
 </script>
-<script>if (!RUNNING_IN_APPS_SCRIPT) { document.body.innerHTML = ""; const f=document.createElement("iframe"); f.title="LABSOMA PPS"; f.src="https://script.google.com/macros/s/AKfycbxoXy5MvijfVLH416h8echiC0xPONgaRRmrlstkW7cleZMLdX2-o6Ha0YT4e6u8S7V7Rw/exec"; f.style="position:fixed;inset:0;width:100%;height:100%;border:0"; document.body.appendChild(f); }</script>
 </body>
 </html>
