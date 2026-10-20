@@ -78,10 +78,45 @@ const ALIAS = {
 };
 
 // ====================== TITIK MASUK ======================
-function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('LABSOMA PPS')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+// GitHub Pages menyajikan antarmuka. Apps Script hanya menyediakan jembatan API tersembunyi.
+const GITHUB_PAGES_URL_ = 'https://labsomapps.github.io/template_soal/';
+const GITHUB_PAGES_ORIGIN_ = 'https://labsomapps.github.io';
+
+function doGet(e) {
+  if (e && e.parameter && e.parameter.bridge === '1') {
+    return HtmlService.createHtmlOutput(bridgeHtml_())
+      .setTitle('LABSOMA PPS API Bridge')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  const html = '<!doctype html><html><head><meta charset="utf-8"></head><body><p>Membuka LABSOMA PPS…</p><script>window.location.replace(' + JSON.stringify(GITHUB_PAGES_URL_) + ');</script></body></html>';
+  return HtmlService.createHtmlOutput(html).setTitle('LABSOMA PPS');
+}
+
+function bridgeHtml_() {
+  return '<!doctype html><html><head><meta charset="utf-8"></head><body><script>' +
+    'const PARENT_ORIGIN=' + JSON.stringify(GITHUB_PAGES_ORIGIN_) + ';' +
+    'window.addEventListener("message",function(ev){' +
+      'if(ev.source!==parent||ev.origin!==PARENT_ORIGIN)return;' +
+      'const m=ev.data;if(!m||m.type!=="labsoma-call")return;' +
+      'google.script.run.withSuccessHandler(function(value){parent.postMessage({type:"labsoma-response",id:m.id,ok:true,value:value},PARENT_ORIGIN);})' +
+      '.withFailureHandler(function(err){parent.postMessage({type:"labsoma-response",id:m.id,ok:false,error:(err&&err.message)||String(err)},PARENT_ORIGIN);})' +
+      '.apiBridge(m.method,m.args||[]);' +
+    '});' +
+    'window.addEventListener("load",function(){parent.postMessage({type:"labsoma-ready"},PARENT_ORIGIN);});' +
+    '</script></body></html>';
+}
+
+// Whitelist only the public APIs needed by the GitHub-hosted interface.
+function apiBridge(method, args) {
+  const api = {
+    api_all: api_all, api_init: api_init, api_save: api_save, api_delete: api_delete,
+    api_import: api_import, api_getSoal: api_getSoal, api_saveSoal: api_saveSoal,
+    api_setStatus: api_setStatus, api_exportWord: api_exportWord, api_exportPdf: api_exportPdf,
+    api_exportZip: api_exportZip, api_importMekanisme: api_importMekanisme,
+    api_savePengaturan: api_savePengaturan, api_setEmailTrigger: api_setEmailTrigger
+  };
+  if (!Object.prototype.hasOwnProperty.call(api, method)) throw new Error('API tidak dikenal.');
+  return api[method].apply(null, Array.isArray(args) ? args : []);
 }
 
 function onOpen() {
