@@ -136,6 +136,15 @@ function h(tag, props, ...kids) {
 }
 
 function call(fn, ...args) {
+  // google.script.run only exists when this page is served by Apps Script.
+  // GitHub Pages is static hosting, so fail clearly instead of leaving the
+  // loading overlay spinning after a synchronous ReferenceError.
+  if (!window.google || !google.script || !google.script.run) {
+    $busy(false);
+    const err = new Error('Aplikasi dibuka dari GitHub Pages. Buka URL Web App Google Apps Script yang berakhiran /exec agar dapat terhubung ke Spreadsheet.');
+    toast(err.message, true);
+    return Promise.reject(err);
+  }
   $busy(true);
   return new Promise((res, rej) => {
     google.script.run
