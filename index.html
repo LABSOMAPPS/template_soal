@@ -135,15 +135,17 @@ function h(tag, props, ...kids) {
   return e;
 }
 
+const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxoXy5MvijfVLH416h8echiC0xPONgaPRmrlstkW7cleZMLdX2-o6Ha0YT4e6u8S7V7Rw/exec';
+
 function call(fn, ...args) {
-  // google.script.run only exists when this page is served by Apps Script.
-  // GitHub Pages is static hosting, so fail clearly instead of leaving the
-  // loading overlay spinning after a synchronous ReferenceError.
+  // GitHub Pages is the public entry point; redirect it to Apps Script.
+  // Apps Script then serves this same file with google.script.run available.
   if (!window.google || !google.script || !google.script.run) {
     $busy(false);
-    const err = new Error('Aplikasi dibuka dari GitHub Pages. Buka URL Web App Google Apps Script yang berakhiran /exec agar dapat terhubung ke Spreadsheet.');
-    toast(err.message, true);
-    return Promise.reject(err);
+    const main = document.getElementById('main');
+    if (main) main.innerHTML = '<div class="card" style="max-width:900px;margin:40px auto;padding:24px">Membuka aplikasi… Jika tidak berpindah otomatis, <a href="' + GAS_WEB_APP_URL + '">klik di sini</a>.</div>';
+    window.location.replace(GAS_WEB_APP_URL);
+    return new Promise(() => {});
   }
   $busy(true);
   return new Promise((res, rej) => {
